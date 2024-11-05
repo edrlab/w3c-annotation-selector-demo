@@ -12,6 +12,8 @@ import { makeRefinable } from "../vendor/apache-annotator/selector/refinable.js"
 import { anchor, cleanup } from "./highlight.mjs";
 import { TextQuoteAnchor, TextPositionAnchor } from "../vendor/anchoring/types.js";
 import { xpathFromNode, nodeFromXPath } from "../vendor/anchoring/xpath.js";
+import { processFragmentDirective } from "../vendor/treora-text-fragment/index.js";
+;
 function copyPreContent(event) {
     // Get the pre element containing the text to be copied
     var preElement = event.target.nextSibling;
@@ -69,6 +71,25 @@ function createXPathSelectorMatcher(selector) {
         }
     };
 }
+function createTextFragmentSelectorMatcher(selector) {
+    return async function* matchAll(scope) {
+        const scopeRange = toRange(scope);
+        const document = ownerDocument(scopeRange);
+        const fragmentValue = selector.value.substring(4);
+        const ranges = processFragmentDirective(fragmentValue, document);
+        console.log("TextFragment Ranges: ", ranges);
+        if (!ranges)
+            throw new Error("TextFragment ranges not found !:");
+        // const range = document.createRange();
+        // range.selectNode(element);
+        for (const range of ranges) {
+            if (scopeRange.isPointInRange(range.startContainer, range.startOffset) &&
+                scopeRange.isPointInRange(range.endContainer, range.endOffset)) {
+                yield range;
+            }
+        }
+    };
+}
 const createMatcher = makeRefinable((selector) => {
     // @ts-expect-error
     const innerCreateMatcher = {
@@ -77,6 +98,7 @@ const createMatcher = makeRefinable((selector) => {
         CssSelector: createCssSelectorMatcher,
         XPathSelector: createXPathSelectorMatcher,
         RangeSelector: makeCreateRangeSelectorMatcher(createMatcher),
+        FragmentSelector: createTextFragmentSelectorMatcher,
     }[selector.type];
     if (!innerCreateMatcher) {
         throw new Error(`Unsupported selector type: ${selector.type}`);
@@ -179,6 +201,20 @@ const describeRangeXPathSelector = async (range) => {
         type: "XPathSelector",
         value: xpathFromNode(commonAncestorHTMLElement, source),
         refinedBy: await describeTextPosition(rangeNormalize, commonAncestorHTMLElement),
+    };
+};
+const describeTextFragmentSelector = async (range) => {
+    const rangeNormalize = normalizeRange(range);
+    const source = document.getElementById("source");
+    const selector = await describeTextQuote(range, source, {
+        minimumQuoteLength: 10,
+    });
+    const fragment = "#:~:text=" + (selector.prefix ? encodeURIComponent(selector.prefix) + "-," : "") +
+        encodeURIComponent(selector.exact) + (selector.suffix ? ",-" + encodeURIComponent(selector.suffix) : "");
+    return {
+        type: "FragmentSelector",
+        value: fragment,
+        conformsTo: " http://tools.ietf.org/rfc/rfc3236",
     };
 };
 const debounceOnSelectionChange = debounce(async function onSelectionChange() {
@@ -304,9 +340,25 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
             if (elem)
                 elem.innerText = "RangeXpath error: " + e;
         }
+        elem = document.getElementById("selector-out-textfragment");
+        try {
+            selector = await describeTextFragmentSelector(range);
+            matchAll = createMatcher(selector);
+            for await (const range of matchAll(source)) {
+                ranges.push([range, "textfragment"]);
+            }
+            if (elem)
+                elem.innerText = JSON.stringify(selector, null, 4);
+        }
+        catch (e) {
+            console.error("textfragment error: ", e);
+            if (elem)
+                elem.innerText = JSON.stringify(selector, null, 4);
+            +"\n" + "textfragment error: " + e;
+        }
         cleanup();
         // if (!ranges.length) anchor(undefined);
-        const txt = `There are ${ranges.length} ranges found ( ${ranges.map(([, v]) => v).join(", ")} )on 7 selectors`;
+        const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on 8 selectors`;
         console.log(txt);
         elem = document.getElementById("results");
         elem.innerText = txt;

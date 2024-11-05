@@ -20,9 +20,18 @@ import { TextQuoteAnchor, TextPositionAnchor } from "../vendor/anchoring/types.j
 
 import { xpathFromNode, nodeFromXPath } from "../vendor/anchoring/xpath.js";
 
+import { processFragmentDirective } from "../vendor/treora-text-fragment/index.js";
+;
+
 interface XPathSelector<T = undefined> extends Selector<T> {
   type: "XPathSelector";
   value: string;
+}
+
+interface TextFragmentSelector<T = undefined> extends Selector<T> {
+  type: "FragmentSelector";
+  value: string;
+  conformsTo: " http://tools.ietf.org/rfc/rfc3236";
 }
 
 function copyPreContent(event: any) {
@@ -37,10 +46,10 @@ function copyPreContent(event: any) {
   var text = JSON.stringify(JSON.parse(preElement.textContent), null, 4);
 
   // Copy the text to the clipboard using the Clipboard API
-  navigator.clipboard.writeText(text).then(function() {
+  navigator.clipboard.writeText(text).then(function () {
     // Display a message indicating that the text was copied successfully
     alert('Text copied to clipboard');
-  }, function(err) {
+  }, function (err) {
     // Display an error message if there was a problem copying the text
     console.error('There was an error copying the text: ', err);
   });
@@ -50,7 +59,7 @@ function copyPreContent(event: any) {
 var preElements = document.body.querySelectorAll('pre');
 
 // Add a copy button to just before each pre element
-preElements.forEach(function(preElement) {
+preElements.forEach(function (preElement) {
   // Create a button element
   var button = document.createElement('button');
   button.innerHTML = '<i class="fa fa-clipboard" aria-hidden="true"></i> Copy';
@@ -78,8 +87,8 @@ function createXPathSelectorMatcher(
     const document = ownerDocument(scopeRange);
     const scopeRangeElement = scopeRange.commonAncestorContainer as HTMLElement;
     const element = nodeFromXPath(selector.value, scopeRangeElement);
-		console.log("XPath node found :", element);
-    if (!element) throw new Error("XPath node not found !:") ;
+    console.log("XPath node found :", element);
+    if (!element) throw new Error("XPath node not found !:");
     const range = document.createRange();
     range.selectNode(element);
 
@@ -92,6 +101,30 @@ function createXPathSelectorMatcher(
   };
 }
 
+function createTextFragmentSelectorMatcher(
+  selector: XPathSelector,
+): Matcher<Node | Range, Range> {
+  return async function* matchAll(scope) {
+    const scopeRange = toRange(scope);
+    const document = ownerDocument(scopeRange);
+    const fragmentValue = selector.value.substring(4);
+    const ranges = processFragmentDirective(fragmentValue, document);
+    console.log("TextFragment Ranges: ", ranges);
+    if (!ranges) throw new Error("TextFragment ranges not found !:");
+    // const range = document.createRange();
+    // range.selectNode(element);
+
+    for (const range of ranges) {
+      if (
+        scopeRange.isPointInRange(range.startContainer, range.startOffset) &&
+        scopeRange.isPointInRange(range.endContainer, range.endOffset)
+      ) {
+        yield range;
+      }
+    }
+  };
+}
+
 const createMatcher = makeRefinable((selector: any) => {
   // @ts-expect-error
   const innerCreateMatcher: any = {
@@ -100,6 +133,7 @@ const createMatcher = makeRefinable((selector: any) => {
     CssSelector: createCssSelectorMatcher,
     XPathSelector: createXPathSelectorMatcher,
     RangeSelector: makeCreateRangeSelectorMatcher(createMatcher as any),
+    FragmentSelector: createTextFragmentSelectorMatcher,
   }[selector.type];
 
   if (!innerCreateMatcher) {
@@ -162,8 +196,8 @@ const describeRange = async (range: Range): Promise<RangeSelector<any> | undefin
     type: "TextPositionSelector",
     start: rangeNormalize.startOffset,
     end: startAndEndEqual
-    ? rangeNormalize.endOffset
-    : rangeNormalize.startContainer.data.length,
+      ? rangeNormalize.endOffset
+      : rangeNormalize.startContainer.data.length,
   };
 
   const endTextPositionSelector = {
@@ -238,6 +272,24 @@ const describeRangeXPathSelector = async (range: Range): Promise<XPathSelector |
   };
 }
 
+const describeTextFragmentSelector = async (range: Range): Promise<TextFragmentSelector | undefined> => {
+  const rangeNormalize = normalizeRange(range);
+
+  const source = document.getElementById("source") as HTMLElement;
+  const selector = await describeTextQuote(range, source, {
+    minimumQuoteLength: 10,
+  });
+
+  const fragment = "#:~:text=" + (selector.prefix ? encodeURIComponent(selector.prefix) + "-," : "") +
+    encodeURIComponent(selector.exact) + (selector.suffix ? ",-" + encodeURIComponent(selector.suffix) : "");
+
+  return {
+    type: "FragmentSelector",
+    value: fragment,
+    conformsTo: " http://tools.ietf.org/rfc/rfc3236",
+  };
+};
+
 const debounceOnSelectionChange = debounce(async function onSelectionChange() {
   const selection = document.getSelection();
   if (!selection) return;
@@ -269,7 +321,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("TextPositionSelector error: ", e);
-      if (elem) elem.innerText = "TextPositionSelector error: " +  e;
+      if (elem) elem.innerText = "TextPositionSelector error: " + e;
     }
 
     elem = document.getElementById("selector-out-textposition-hypo");
@@ -281,7 +333,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("TextPositionSelectorHypothesis error: ", e);
-      if (elem) elem.innerText = "TextPositionSelectorHypothesis error: " +  e;
+      if (elem) elem.innerText = "TextPositionSelectorHypothesis error: " + e;
     }
 
     elem = document.getElementById("selector-out-textquote-hypo");
@@ -293,7 +345,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("TextQuoteSelectorHypothesis error: ", e);
-      if (elem) elem.innerText = "TextQuoteSelectorHypothesis error: " +  e;
+      if (elem) elem.innerText = "TextQuoteSelectorHypothesis error: " + e;
     }
 
     elem = document.getElementById("selector-out-textquote");
@@ -308,7 +360,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("TextQuoteSelector error: ", e);
-      if (elem) elem.innerText = "TextQuoteSelector error: " +  e;
+      if (elem) elem.innerText = "TextQuoteSelector error: " + e;
     }
 
 
@@ -323,7 +375,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("RangeSelector error: ", e);
-      if (elem) elem.innerText = "RangeSelector error: " +  e;
+      if (elem) elem.innerText = "RangeSelector error: " + e;
     }
 
     elem = document.getElementById("selector-out-rangecss");
@@ -336,7 +388,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("RangeCss error: ", e);
-      if (elem) elem.innerText = "RangeCss error: " +  e;
+      if (elem) elem.innerText = "RangeCss error: " + e;
     }
 
     elem = document.getElementById("selector-out-rangexpath");
@@ -349,23 +401,38 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem) elem.innerText = JSON.stringify(selector, null, 4);
     } catch (e) {
       console.error("RangeXpath error: ", e);
-      if (elem) elem.innerText = "RangeXpath error: " +  e;
+      if (elem) elem.innerText = "RangeXpath error: " + e;
     }
+
+    elem = document.getElementById("selector-out-textfragment");
+    try {
+      selector = await describeTextFragmentSelector(range);
+      matchAll = createMatcher(selector);
+      for await (const range of matchAll(source)) {
+        ranges.push([range, "textfragment"]);
+      }
+      if (elem) elem.innerText = JSON.stringify(selector, null, 4);
+    } catch (e) {
+      console.error("textfragment error: ", e);
+      if (elem) elem.innerText = JSON.stringify(selector, null, 4); + "\n" + "textfragment error: " + e;
+    }
+
+
 
     cleanup();
     // if (!ranges.length) anchor(undefined);
 
-    const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on 7 selectors`;
+    const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on 8 selectors`;
     console.log(txt);
     elem = document.getElementById("results") as HTMLElement;
     elem.innerText = txt;
     //    elem.innerText += areRangesEqual(ranges) ? "All Ranges are equal" : "Not all Ranges are equal !!";
 
-		for (const [range, id] of ranges) {
-			console.log("highlight this Range: ", range);
-			anchor(range, id);
-		}
-	}
+    for (const [range, id] of ranges) {
+      console.log("highlight this Range: ", range);
+      anchor(range, id);
+    }
+  }
 }, 500);
 document.addEventListener("selectionchange", debounceOnSelectionChange);
 
@@ -373,54 +440,54 @@ const inputTextArea = document.getElementById("input") as HTMLElement;
 
 const debounceInputChange = debounce(async (e: any) => {
 
-	const inputTextArea = document.getElementById("input") as HTMLTextAreaElement;
-	const selector = inputTextArea.value;
-	if (!selector) return ;
+  const inputTextArea = document.getElementById("input") as HTMLTextAreaElement;
+  const selector = inputTextArea.value;
+  if (!selector) return;
 
-	let selectorParsed: any;
-	try {
-		selectorParsed = JSON.parse(selector);
-	} catch {
-		return ;
-	}
+  let selectorParsed: any;
+  try {
+    selectorParsed = JSON.parse(selector);
+  } catch {
+    return;
+  }
 
-	console.log(selectorParsed);
+  console.log(selectorParsed);
 
-	const source = document.getElementById("source") as HTMLElement;
-	cleanup();
-	let elem: HTMLElement;
+  const source = document.getElementById("source") as HTMLElement;
+  cleanup();
+  let elem: HTMLElement;
 
-	elem = document.getElementById("selector-out-rangecss") as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-rangecss") as HTMLElement;
+  elem.innerText = "";
 
-	elem = document.getElementById("selector-out-range") as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-range") as HTMLElement;
+  elem.innerText = "";
 
-	elem = document.getElementById("selector-out-textquote")as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-textquote") as HTMLElement;
+  elem.innerText = "";
 
-	elem = document.getElementById("selector-out-textquote-hypo")as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-textquote-hypo") as HTMLElement;
+  elem.innerText = "";
 
-	elem = document.getElementById("selector-out-textposition-hypo") as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-textposition-hypo") as HTMLElement;
+  elem.innerText = "";
 
-	elem = document.getElementById("selector-out-textposition") as HTMLElement;
-	elem.innerText = "";
+  elem = document.getElementById("selector-out-textposition") as HTMLElement;
+  elem.innerText = "";
 
   elem = document.getElementById("selector-out-rangexpath") as HTMLElement;
   elem.innerText = "";
 
-	const matchAll = createMatcher(selectorParsed);
-	for await (const range of matchAll(source)) {
-		anchor(range as Range, "custom");
-	}
+  const matchAll = createMatcher(selectorParsed);
+  for await (const range of matchAll(source)) {
+    anchor(range as Range, "custom");
+  }
 
 
 }, 500);
 inputTextArea.addEventListener("change", debounceInputChange);
 
-const inputButton  = document.getElementById("inputButton") as HTMLElement;
+const inputButton = document.getElementById("inputButton") as HTMLElement;
 
 
 inputButton.onclick = () => debounceInputChange();;

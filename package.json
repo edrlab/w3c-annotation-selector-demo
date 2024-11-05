@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "tsc": "tsc",
     "build": "npm run tsc && npm run esbuild",
-    "esbuild": "esbuild build/demo/index.mjs --bundle --format=esm --target=esnext --outfile=web/index.js && cp demo/index.html web/index.html",
+    "esbuild": "esbuild build/demo/index.mjs --bundle --format=esm --target=esnext --outfile=web/index.js && cp demo/index.xhtml web/index.xhtml",
     "serve": "cd web && python3 -m http.server --protocol HTTP/1.1",
     "publish": "surge . accidental-shame.surge.sh",
     "dev": "concurrently \"tsc --watch\" \"esbuild --cache\" \"npm run serve\"",

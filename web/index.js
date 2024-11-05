@@ -292,8 +292,8 @@ var TextNodeChunker = class {
     });
     this.iter.nextNode();
     if (!isText2(this.iter.referenceNode)) {
-      const nextNode = this.iter.nextNode();
-      if (nextNode === null)
+      const nextNode2 = this.iter.nextNode();
+      if (nextNode2 === null)
         throw new EmptyScopeError();
     }
   }
@@ -1834,6 +1834,490 @@ var TextQuoteAnchor = class _TextQuoteAnchor {
   }
 };
 
+// build/vendor/treora-text-fragment/common.js
+function nextNode(node) {
+  const walker = (node.ownerDocument ?? node).createTreeWalker(node.getRootNode());
+  walker.currentNode = node;
+  return walker.nextNode();
+}
+function isElement(node) {
+  return node.nodeType === Node.ELEMENT_NODE;
+}
+
+// build/vendor/treora-text-fragment/whatwg-dom.js
+function isDescendant(nodeA, nodeB) {
+  if (nodeA.parentNode === nodeB)
+    return true;
+  const nodeC = nodeA.parentNode;
+  if (nodeC && isDescendant(nodeC, nodeB))
+    return true;
+  return false;
+}
+function nodeLength(node) {
+  switch (node.nodeType) {
+    // “DocumentType”
+    case Node.DOCUMENT_TYPE_NODE:
+      return 0;
+    // “Text”
+    case Node.TEXT_NODE:
+    // “ProcessingInstruction”
+    case Node.PROCESSING_INSTRUCTION_NODE:
+    // “Comment”
+    case Node.COMMENT_NODE:
+      return node.data.length;
+    // “Any other node”
+    default:
+      return node.childNodes.length;
+  }
+}
+function nextNodeInShadowIncludingTreeOrder(node) {
+  if (isShadowHost(node)) {
+    return nextNodeInShadowIncludingTreeOrder(node.shadowRoot);
+  } else {
+    return nextNode(node);
+  }
+}
+function isShadowHost(node) {
+  return isElement(node) && node.shadowRoot !== null;
+}
+function isShadowIncludingDescendant(nodeA, nodeB) {
+  if (isDescendant(nodeA, nodeB))
+    return true;
+  const nodeARoot = nodeA.getRootNode();
+  if (nodeARoot instanceof ShadowRoot && isShadowIncludingInclusiveDescendant(nodeARoot.host, nodeB))
+    return true;
+  return false;
+}
+function isShadowIncludingInclusiveDescendant(nodeA, nodeB) {
+  if (nodeA === nodeB)
+    return true;
+  if (isShadowIncludingDescendant(nodeA, nodeB))
+    return true;
+  return false;
+}
+function substringData(node, offset, count) {
+  const length = nodeLength(node);
+  if (offset > length)
+    throw new DOMException("", "IndexSizeError");
+  if (offset + count > length) {
+    return node.data.substring(offset);
+  }
+  return node.data.substring(offset, offset + count);
+}
+
+// build/vendor/treora-text-fragment/whatwg-infra.js
+var asciiWhitespace = "	\n\f\r ";
+var htmlNamespace = "http://www.w3.org/1999/xhtml";
+var xmlNamespace = "http://www.w3.org/XML/1998/namespace";
+
+// build/vendor/treora-text-fragment/whatwg-html.js
+function languageOf(node) {
+  let curNode = node;
+  while (curNode !== null) {
+    if (isElement(curNode)) {
+      const language = curNode.getAttributeNS(xmlNamespace, "lang") ?? curNode.getAttributeNS(null, "lang");
+      if (language !== null)
+        return language;
+    }
+    curNode = curNode.parentNode;
+  }
+  const pragmaSetDefaultLanguage = getPragmaSetDefaultLanguage();
+  if (pragmaSetDefaultLanguage !== void 0)
+    return pragmaSetDefaultLanguage;
+  return "";
+}
+function getPragmaSetDefaultLanguage() {
+  let pragmaSetDefaultLanguage = void 0;
+  const metaElements = document.querySelectorAll('meta[http-equiv="content-language"]');
+  metaElements.forEach((element) => {
+    if (element.hasAttribute("content"))
+      return;
+    const input = element.getAttribute("content");
+    if (input.includes(","))
+      return;
+    let position = 0;
+    while (position < input.length && asciiWhitespace.includes(input[position]))
+      position++;
+    let candidate = "";
+    while (!asciiWhitespace.includes(input[position])) {
+      candidate += input[position];
+      position++;
+    }
+    if (candidate === "")
+      return;
+    pragmaSetDefaultLanguage = candidate;
+  });
+  return pragmaSetDefaultLanguage;
+}
+var voidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
+function serializesAsVoid(element) {
+  if (element.namespaceURI === htmlNamespace && (voidElements.includes(element.localName) || ["basefont", "bgsound", "frame", "keygen"].includes(element.localName))) {
+    return true;
+  }
+  return false;
+}
+function isBeingRendered(element) {
+  return !element.hasAttribute("hidden");
+}
+
+// build/vendor/treora-text-fragment/index.js
+function parseTextDirective(textDirectiveInput) {
+  const textDirectiveString = textDirectiveInput.substring(5);
+  const tokens = textDirectiveString.split(",");
+  if (tokens.length < 1 || tokens.length > 4)
+    return null;
+  if (tokens.some((token) => token === ""))
+    return null;
+  const retVal = {
+    // XXX Initialising textStart to null would conflict with the type definition; hence using Partial<…> instead. Is this temporary type mismatch acceptable in the spec?
+    textEnd: null,
+    prefix: null,
+    suffix: null
+  };
+  const potentialPrefix = tokens[0];
+  if (potentialPrefix.endsWith("-")) {
+    retVal.prefix = decodeURIComponent(potentialPrefix.substring(0, potentialPrefix.length - 1));
+    tokens.shift();
+  }
+  const potentialSuffix = tokens[tokens.length - 1] ?? null;
+  if (potentialSuffix !== null && potentialSuffix.startsWith("-")) {
+    retVal.suffix = decodeURIComponent(potentialSuffix.substring(1));
+    tokens.pop();
+  }
+  if (tokens.length !== 1 && tokens.length !== 2)
+    return null;
+  retVal.textStart = decodeURIComponent(tokens[0]);
+  if (tokens.length === 2)
+    retVal.textEnd = decodeURIComponent(tokens[tokens.length - 1]);
+  return retVal;
+}
+function isValidFragmentDirective(input) {
+  return true;
+}
+function isTextFragmentDirective(input) {
+  return input.startsWith("text=");
+}
+function shadowIncludingParent(node) {
+  if (node instanceof ShadowRoot)
+    return node.host;
+  return node.parentNode;
+}
+function processFragmentDirective(fragmentDirectiveInput, document2) {
+  if (!isValidFragmentDirective(fragmentDirectiveInput)) {
+    console.log("w4");
+    return [];
+  }
+  const directives = fragmentDirectiveInput.split("&");
+  const ranges = [];
+  console.log("ewr", directives);
+  for (const directive of directives) {
+    if (!isTextFragmentDirective(directive))
+      continue;
+    console.log("fgh");
+    const parsedValues = parseTextDirective(directive);
+    console.log(parsedValues);
+    if (parsedValues === null)
+      continue;
+    const range = findRangeFromTextDirective(parsedValues, document2);
+    console.log(range);
+    if (range !== null)
+      ranges.push(range);
+  }
+  console.log("end");
+  return ranges;
+}
+function findRangeFromTextDirective(parsedValues, document2) {
+  const searchRange = document2.createRange();
+  searchRange.setStart(document2, 0);
+  searchRange.setEnd(document2, document2.childNodes.length);
+  while (!searchRange.collapsed) {
+    let potentialMatch = null;
+    if (parsedValues.prefix !== null) {
+      const prefixMatch = findStringInRange(parsedValues.prefix, searchRange, true, false);
+      if (prefixMatch === null)
+        return null;
+      searchRange.setStart(...firstBoundaryPointAfter(getStart(prefixMatch)));
+      const matchRange = document2.createRange();
+      matchRange.setStart(...getEnd(prefixMatch));
+      matchRange.setEnd(...getEnd(searchRange));
+      advanceRangeStartToNextNonWhitespacePosition(matchRange);
+      if (matchRange.collapsed)
+        return null;
+      const mustEndAtWordBoundary = parsedValues.textEnd !== null || parsedValues.suffix === null;
+      potentialMatch = findStringInRange(parsedValues.textStart, matchRange, false, mustEndAtWordBoundary);
+      if (potentialMatch === null)
+        return null;
+      if (!samePoint(getStart(potentialMatch), getStart(matchRange)))
+        continue;
+    } else {
+      const mustEndAtWordBoundary = parsedValues.textEnd !== null || parsedValues.suffix === null;
+      potentialMatch = findStringInRange(parsedValues.textStart, searchRange, true, mustEndAtWordBoundary);
+      if (potentialMatch === null)
+        return null;
+      searchRange.setStart(...firstBoundaryPointAfter(getStart(potentialMatch)));
+    }
+    if (parsedValues.textEnd !== null) {
+      const textEndRange = document2.createRange();
+      textEndRange.setStart(...getEnd(potentialMatch));
+      textEndRange.setEnd(...getEnd(searchRange));
+      const mustEndAtWordBoundary = parsedValues.suffix === null;
+      const textEndMatch = findStringInRange(parsedValues.textEnd, textEndRange, true, mustEndAtWordBoundary);
+      if (textEndMatch === null)
+        return null;
+      potentialMatch.setEnd(...getEnd(textEndMatch));
+    }
+    if (parsedValues.suffix === null)
+      return potentialMatch;
+    const suffixRange = document2.createRange();
+    suffixRange.setStart(...getEnd(potentialMatch));
+    suffixRange.setEnd(...getEnd(searchRange));
+    advanceRangeStartToNextNonWhitespacePosition(suffixRange);
+    const suffixMatch = findStringInRange(parsedValues.suffix, suffixRange, false, true);
+    if (suffixMatch === null)
+      return null;
+    if (samePoint(getStart(suffixMatch), getStart(suffixRange)))
+      return potentialMatch;
+  }
+  return null;
+}
+function advanceRangeStartToNextNonWhitespacePosition(range) {
+  while (!range.collapsed) {
+    const node = range.startContainer;
+    const offset = range.startOffset;
+    if (partOfNonSearchableSubtree(node)) {
+      range.setStart(
+        nextNodeInShadowIncludingTreeOrderThatIsNotAShadowIncludingDescendantOf(node),
+        // XXX Can we be sure there is a next node? Asserting it here.
+        0
+      );
+      continue;
+    }
+    if (!isVisibleTextNode(node)) {
+      range.setStart(
+        nextNodeInShadowIncludingTreeOrder(node),
+        // XXX Can we be sure there is a next node? Asserting it here.
+        0
+      );
+      continue;
+    }
+    if (substringData(node, offset, 6) === "&nbsp;") {
+      range.setStart(range.startContainer, range.startOffset + 6);
+    } else if (substringData(node, offset, 5) === "&nbsp") {
+      range.setStart(range.startContainer, range.startOffset + 5);
+    } else {
+      const cp = node.data.codePointAt(offset);
+      if (!hasWhiteSpaceProperty(cp))
+        return;
+      range.setStart(range.startContainer, range.startOffset + 1);
+    }
+    if (range.startOffset === nodeLength(node)) {
+      range.setStart(
+        nextNodeInShadowIncludingTreeOrder(node),
+        // XXX Can we be sure there is a next node? Asserting it here.
+        0
+      );
+    }
+  }
+}
+function findStringInRange(query, searchRange, wordStartBounded, wordEndBounded) {
+  while (!searchRange.collapsed) {
+    let curNode = searchRange.startContainer;
+    if (partOfNonSearchableSubtree(curNode)) {
+      searchRange.setStart(
+        nextNodeInShadowIncludingTreeOrderThatIsNotAShadowIncludingDescendantOf(curNode),
+        // XXX Can we be sure there is a next node? Asserting it here.
+        0
+      );
+      continue;
+    }
+    if (!isVisibleTextNode(curNode)) {
+      curNode = nextNodeInShadowIncludingTreeOrder(curNode);
+      while (curNode && curNode.nodeType === Node.DOCUMENT_TYPE_NODE)
+        curNode = nextNodeInShadowIncludingTreeOrder(curNode);
+      searchRange.setStart(
+        curNode,
+        // XXX Can we be sure there is a next node? Asserting it here.
+        0
+      );
+      continue;
+    }
+    const blockAncestor = nearestBlockAncestorOf(curNode);
+    const textNodeList = [];
+    while (curNode && isShadowIncludingDescendant(
+      curNode,
+      /* of */
+      blockAncestor
+    ) && searchRange.comparePoint(curNode, 0) !== 1) {
+      if (hasBlockLevelDisplay(curNode)) {
+        break;
+      }
+      if (isSearchInvisible(curNode)) {
+        curNode = nextNodeInShadowIncludingTreeOrderThatIsNotAShadowIncludingDescendantOf(curNode);
+        continue;
+      }
+      if (isVisibleTextNode(curNode)) {
+        textNodeList.push(curNode);
+      }
+      curNode = nextNodeInShadowIncludingTreeOrder(curNode);
+    }
+    const resultingRange = findARangeFromANodeList(query, searchRange, textNodeList, wordStartBounded, wordEndBounded);
+    if (resultingRange !== null) {
+      return resultingRange;
+    }
+    if (curNode === null)
+      break;
+    searchRange.setStart(curNode, 0);
+  }
+  return null;
+}
+function isSearchInvisible(node) {
+  if (isElement(node) && node.namespaceURI === htmlNamespace) {
+    if (getComputedStyle(node).display === "none")
+      return true;
+    if (serializesAsVoid(node))
+      return true;
+    if (["iframe", "image", "meter", "object", "progress", "style", "script", "video", "audio"].includes(node.localName))
+      return true;
+    if (node.localName === "select" && !node.hasAttribute("multiple"))
+      return true;
+  }
+  return false;
+}
+function partOfNonSearchableSubtree(node) {
+  let curNode = node;
+  while (curNode) {
+    if (isSearchInvisible(curNode))
+      return true;
+    curNode = shadowIncludingParent(curNode);
+  }
+  return false;
+}
+function isVisibleTextNode(node) {
+  return node.nodeType === Node.TEXT_NODE && node.parentElement !== null && getComputedStyle(node.parentElement).visibility === "visible" && isBeingRendered(node.parentElement);
+}
+function hasBlockLevelDisplay(node) {
+  return isElement(node) && ["block", "table", "flow-root", "grid", "flex", "list-item"].includes(getComputedStyle(node).display);
+}
+function nearestBlockAncestorOf(node) {
+  let curNode = node;
+  while (curNode !== null) {
+    if (curNode.nodeType !== Node.TEXT_NODE && hasBlockLevelDisplay(curNode))
+      return curNode;
+    else
+      curNode = curNode.parentNode;
+  }
+  return (node.ownerDocument ?? node).documentElement;
+}
+function findARangeFromANodeList(queryString, searchRange, nodes, wordStartBounded, wordEndBounded) {
+  const searchBuffer = nodes.map((node) => node.data).join("");
+  let searchStart = 0;
+  if (nodes[0] === searchRange.startContainer)
+    searchStart = searchRange.startOffset;
+  let start2 = null;
+  let end = null;
+  let matchIndex = null;
+  while (matchIndex === null) {
+    matchIndex = searchBuffer.toLowerCase().indexOf(queryString.toLowerCase(), searchStart);
+    if (matchIndex === -1)
+      return null;
+    const endIx = matchIndex + queryString.length;
+    start2 = getBoundaryPointAtIndex(matchIndex, nodes, false);
+    end = getBoundaryPointAtIndex(endIx, nodes, true);
+    if (wordStartBounded && !isAtWordBoundary(matchIndex, searchBuffer, languageOf(start2[0])) || wordEndBounded && !isAtWordBoundary(matchIndex + queryString.length, searchBuffer, languageOf(end[0]))) {
+      searchStart = matchIndex + 1;
+      matchIndex = null;
+    }
+  }
+  let endInset = 0;
+  if (nodes[nodes.length - 1] === searchRange.endContainer)
+    endInset = searchRange.endContainer.length - searchRange.endOffset;
+  if (matchIndex + queryString.length > searchBuffer.length - endInset)
+    return null;
+  start2 = start2;
+  end = end;
+  const result = document.createRange();
+  result.setStart(...start2);
+  result.setEnd(...end);
+  return result;
+}
+function getBoundaryPointAtIndex(index2, nodes, isEnd) {
+  let counted = 0;
+  for (const curNode of nodes) {
+    let nodeEnd = counted + curNode.length;
+    if (isEnd)
+      nodeEnd += 1;
+    if (nodeEnd > index2) {
+      return [curNode, index2 - counted];
+    }
+    counted += curNode.length;
+  }
+  return null;
+}
+function isAtWordBoundary(position, text, locale) {
+  if (text.charAt(position) && text.substring(position - 1, position + 1).match(/^[\w\d]{2,2}$/) === null)
+    return true;
+  if (text.length > 0 && (position === 0 || position === text.length))
+    return true;
+  return false;
+}
+function getStart(range) {
+  return [range.startContainer, range.startOffset];
+}
+function getEnd(range) {
+  return [range.endContainer, range.endOffset];
+}
+function samePoint(point1, point2) {
+  return point1[0] === point2[0] && point1[1] === point2[1];
+}
+function nextNodeInShadowIncludingTreeOrderThatIsNotAShadowIncludingDescendantOf(node) {
+  let curNode = nextNodeInShadowIncludingTreeOrder(node);
+  while (curNode && isShadowIncludingDescendant(curNode, node)) {
+    curNode = nextNodeInShadowIncludingTreeOrder(curNode);
+  }
+  return curNode;
+}
+function hasWhiteSpaceProperty(codePoint) {
+  const whitespaceCodePoints = [
+    9,
+    10,
+    11,
+    12,
+    13,
+    133,
+    8232,
+    8233,
+    32,
+    12288,
+    5760,
+    8192,
+    8193,
+    8194,
+    8195,
+    8196,
+    8197,
+    8198,
+    8200,
+    8201,
+    8202,
+    8287,
+    160,
+    8199,
+    8239
+  ];
+  return whitespaceCodePoints.includes(codePoint);
+}
+function firstBoundaryPointAfter([node, offset]) {
+  if (offset < nodeLength(node)) {
+    return [node, offset + 1];
+  } else {
+    const next = nextNode(node);
+    if (next !== null)
+      return [next, 0];
+    else
+      return null;
+  }
+}
+
 // build/demo/index.mjs
 function copyPreContent(event) {
   var preElement = event.target.nextSibling;
@@ -1881,13 +2365,30 @@ function createXPathSelectorMatcher(selector2) {
     }
   };
 }
+function createTextFragmentSelectorMatcher(selector2) {
+  return async function* matchAll(scope) {
+    const scopeRange = toRange(scope);
+    const document2 = ownerDocument(scopeRange);
+    const fragmentValue = selector2.value.substring(4);
+    const ranges = processFragmentDirective(fragmentValue, document2);
+    console.log("TextFragment Ranges: ", ranges);
+    if (!ranges)
+      throw new Error("TextFragment ranges not found !:");
+    for (const range of ranges) {
+      if (scopeRange.isPointInRange(range.startContainer, range.startOffset) && scopeRange.isPointInRange(range.endContainer, range.endOffset)) {
+        yield range;
+      }
+    }
+  };
+}
 var createMatcher = makeRefinable((selector2) => {
   const innerCreateMatcher = {
     TextQuoteSelector: createTextQuoteSelectorMatcher,
     TextPositionSelector: createTextPositionSelectorMatcher,
     CssSelector: createCssSelectorMatcher,
     XPathSelector: createXPathSelectorMatcher,
-    RangeSelector: makeCreateRangeSelectorMatcher(createMatcher)
+    RangeSelector: makeCreateRangeSelectorMatcher(createMatcher),
+    FragmentSelector: createTextFragmentSelectorMatcher
   }[selector2.type];
   if (!innerCreateMatcher) {
     throw new Error(`Unsupported selector type: ${selector2.type}`);
@@ -1978,6 +2479,19 @@ var describeRangeXPathSelector = async (range) => {
     type: "XPathSelector",
     value: xpathFromNode(commonAncestorHTMLElement, source),
     refinedBy: await describeTextPosition2(rangeNormalize, commonAncestorHTMLElement)
+  };
+};
+var describeTextFragmentSelector = async (range) => {
+  const rangeNormalize = normalizeRange(range);
+  const source = document.getElementById("source");
+  const selector2 = await describeTextQuote2(range, source, {
+    minimumQuoteLength: 10
+  });
+  const fragment = "#:~:text=" + (selector2.prefix ? encodeURIComponent(selector2.prefix) + "-," : "") + encodeURIComponent(selector2.exact) + (selector2.suffix ? ",-" + encodeURIComponent(selector2.suffix) : "");
+  return {
+    type: "FragmentSelector",
+    value: fragment,
+    conformsTo: " http://tools.ietf.org/rfc/rfc3236"
   };
 };
 var debounceOnSelectionChange = debounce(async function onSelectionChange() {
@@ -2093,8 +2607,23 @@ var debounceOnSelectionChange = debounce(async function onSelectionChange() {
       if (elem)
         elem.innerText = "RangeXpath error: " + e;
     }
+    elem = document.getElementById("selector-out-textfragment");
+    try {
+      selector2 = await describeTextFragmentSelector(range);
+      matchAll = createMatcher(selector2);
+      for await (const range2 of matchAll(source)) {
+        ranges.push([range2, "textfragment"]);
+      }
+      if (elem)
+        elem.innerText = JSON.stringify(selector2, null, 4);
+    } catch (e) {
+      console.error("textfragment error: ", e);
+      if (elem)
+        elem.innerText = JSON.stringify(selector2, null, 4);
+      +"\n" + "textfragment error: " + e;
+    }
     cleanup();
-    const txt = `There are ${ranges.length} ranges found ( ${ranges.map(([, v]) => v).join(", ")} )on 7 selectors`;
+    const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on 8 selectors`;
     console.log(txt);
     elem = document.getElementById("results");
     elem.innerText = txt;
