@@ -1674,7 +1674,7 @@ function getPathSegment(node) {
   const pos = getNodePosition(node);
   return `${name}[${pos}]`;
 }
-function xpathFromNode(node, root) {
+function xpathFromNode(node, root = document.body) {
   let xpath = "";
   let elem = node;
   while (elem !== root) {
@@ -2321,7 +2321,7 @@ function firstBoundaryPointAfter([node, offset]) {
 // build/demo/index.mjs
 function copyPreContent(event) {
   var preElement = event.target.nextSibling;
-  while (preElement && preElement.nodeName !== "PRE") {
+  while (preElement && preElement.nodeName !== "pre") {
     preElement = preElement.nextSibling;
   }
   if (!preElement)
@@ -2337,7 +2337,7 @@ var preElements = document.body.querySelectorAll("pre");
 preElements.forEach(function(preElement) {
   var button = document.createElement("button");
   button.innerHTML = '<i class="fa fa-clipboard" aria-hidden="true"></i> Copy';
-  button.onclick = copyPreContent;
+  button.addEventListener("click", copyPreContent);
   preElement.parentNode.insertBefore(button, preElement);
 });
 function debounce(func, timeout) {
@@ -2353,8 +2353,7 @@ function createXPathSelectorMatcher(selector2) {
   return async function* matchAll(scope) {
     const scopeRange = toRange(scope);
     const document2 = ownerDocument(scopeRange);
-    const scopeRangeElement = scopeRange.commonAncestorContainer;
-    const element = nodeFromXPath(selector2.value, scopeRangeElement);
+    const element = nodeFromXPath(selector2.value);
     console.log("XPath node found :", element);
     if (!element)
       throw new Error("XPath node not found !:");
@@ -2474,10 +2473,9 @@ var describeRangeXPathSelector = async (range) => {
   if (!commonAncestorHTMLElement) {
     return void 0;
   }
-  const source = document.getElementById("source");
   return {
     type: "XPathSelector",
-    value: xpathFromNode(commonAncestorHTMLElement, source),
+    value: xpathFromNode(commonAncestorHTMLElement),
     refinedBy: await describeTextPosition2(rangeNormalize, commonAncestorHTMLElement)
   };
 };
@@ -2671,7 +2669,7 @@ var debounceInputChange = debounce(async (e) => {
 }, 500);
 inputTextArea.addEventListener("change", debounceInputChange);
 var inputButton = document.getElementById("inputButton");
-inputButton.onclick = () => debounceInputChange();
+inputButton.addEventListener("click", debounceInputChange);
 /**
  * @license
  * Licensed to the Apache Software Foundation (ASF) under one

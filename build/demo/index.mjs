@@ -17,7 +17,7 @@ import { processFragmentDirective } from "../vendor/treora-text-fragment/index.j
 function copyPreContent(event) {
     // Get the pre element containing the text to be copied
     var preElement = event.target.nextSibling;
-    while (preElement && preElement.nodeName !== 'PRE') {
+    while (preElement && preElement.nodeName !== 'pre') {
         preElement = preElement.nextSibling;
     }
     if (!preElement)
@@ -40,7 +40,7 @@ preElements.forEach(function (preElement) {
     // Create a button element
     var button = document.createElement('button');
     button.innerHTML = '<i class="fa fa-clipboard" aria-hidden="true"></i> Copy';
-    button.onclick = copyPreContent;
+    button.addEventListener('click', copyPreContent);
     // Add the button just before the pre element
     preElement.parentNode.insertBefore(button, preElement);
 });
@@ -58,8 +58,7 @@ function createXPathSelectorMatcher(selector) {
     return async function* matchAll(scope) {
         const scopeRange = toRange(scope);
         const document = ownerDocument(scopeRange);
-        const scopeRangeElement = scopeRange.commonAncestorContainer;
-        const element = nodeFromXPath(selector.value, scopeRangeElement);
+        const element = nodeFromXPath(selector.value);
         console.log("XPath node found :", element);
         if (!element)
             throw new Error("XPath node not found !:");
@@ -196,10 +195,9 @@ const describeRangeXPathSelector = async (range) => {
     if (!commonAncestorHTMLElement) {
         return undefined;
     }
-    const source = document.getElementById("source");
     return {
         type: "XPathSelector",
-        value: xpathFromNode(commonAncestorHTMLElement, source),
+        value: xpathFromNode(commonAncestorHTMLElement),
         refinedBy: await describeTextPosition(rangeNormalize, commonAncestorHTMLElement),
     };
 };
@@ -408,5 +406,5 @@ const debounceInputChange = debounce(async (e) => {
 }, 500);
 inputTextArea.addEventListener("change", debounceInputChange);
 const inputButton = document.getElementById("inputButton");
-inputButton.onclick = () => debounceInputChange();
-;
+inputButton.addEventListener("click", debounceInputChange);
+// inputButton.onclick = () => debounceInputChange();;

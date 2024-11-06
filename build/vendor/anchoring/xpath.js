@@ -31,7 +31,7 @@ function getPathSegment(node) {
  * @param node - The node to generate a path to
  * @param root - Root node to which the returned path is relative
  */
-export function xpathFromNode(node, root) {
+export function xpathFromNode(node, root = document.body) {
     let xpath = '';
     let elem = node;
     while (elem !== root) {
