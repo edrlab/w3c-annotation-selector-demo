@@ -2432,7 +2432,7 @@ var describeRange = async (range) => {
   if (startIsElement) {
     return void 0;
   }
-  const startContainerHTMLElement = rangeNormalize.startContainer.parentNode instanceof HTMLElement ? rangeNormalize.startContainer.parentNode : void 0;
+  const startContainerHTMLElement = range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE ? range.startContainer.parentNode : void 0;
   if (!startContainerHTMLElement) {
     return void 0;
   }
@@ -2444,7 +2444,7 @@ var describeRange = async (range) => {
   if (endIsElement) {
     return void 0;
   }
-  const endContainerHTMLElement = rangeNormalize.endContainer.parentNode instanceof HTMLElement ? rangeNormalize.endContainer.parentNode : void 0;
+  const endContainerHTMLElement = range.endContainer.parentNode && range.endContainer.parentNode.nodeType === Node.ELEMENT_NODE ? range.endContainer.parentNode : void 0;
   if (!endContainerHTMLElement) {
     return void 0;
   }
@@ -2485,7 +2485,7 @@ var describeRange = async (range) => {
 };
 var describeRangeCssSelectorWithTextPosition = async (range) => {
   const rangeNormalize = normalizeRange(range);
-  const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement ? rangeNormalize.commonAncestorContainer : range.startContainer.parentNode instanceof HTMLElement ? range.startContainer.parentNode : void 0;
+  const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? rangeNormalize.commonAncestorContainer : range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE ? range.startContainer.parentNode : void 0;
   if (!commonAncestorHTMLElement) {
     return void 0;
   }
@@ -2497,7 +2497,7 @@ var describeRangeCssSelectorWithTextPosition = async (range) => {
 };
 var describeRangeCssSelectorWithTextQuote = async (range) => {
   const rangeNormalize = normalizeRange(range);
-  const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement ? rangeNormalize.commonAncestorContainer : range.startContainer.parentNode instanceof HTMLElement ? range.startContainer.parentNode : void 0;
+  const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? rangeNormalize.commonAncestorContainer : range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE ? range.startContainer.parentNode : void 0;
   if (!commonAncestorHTMLElement) {
     return void 0;
   }

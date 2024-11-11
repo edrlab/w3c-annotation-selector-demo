@@ -149,7 +149,7 @@ function createTextNodeIndexSelectorMatcher(
     const nodeIndex = selector.value;
     if (nodeIndex < 0) throw new Error("TextNodeIndex value is negative");
     const textNode = element.childNodes[nodeIndex];
-    if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE) throw new Error("Not a TEXT_NODE") ;
+    if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE) throw new Error("Not a TEXT_NODE");
 
     const range = document.createRange();
     range.selectNode(textNode);
@@ -167,7 +167,7 @@ function createCodeUnitSelectorMatcher(
     const scopeRange = toRange(scope);
     const scopeRangeNormalized = normalizeRange(scopeRange);
     const textNode = scopeRangeNormalized.commonAncestorContainer as Text;
-    if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE) throw new Error("Not a TEXT_NODE") ;
+    if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE) throw new Error("Not a TEXT_NODE");
     const codeUnit = selector.value;
     if (codeUnit < 0) throw new Error("TextcodeUnit value is negative");
 
@@ -218,9 +218,8 @@ const describeRange = async (range: Range): Promise<RangeSelector<any> | undefin
     return undefined;
   }
   const startContainerHTMLElement =
-    rangeNormalize.startContainer.parentNode instanceof HTMLElement
-      ? rangeNormalize.startContainer.parentNode
-      : undefined;
+    ((range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE) ?
+      range.startContainer.parentNode as Element : undefined);
   if (!startContainerHTMLElement) {
     return undefined;
   }
@@ -236,9 +235,8 @@ const describeRange = async (range: Range): Promise<RangeSelector<any> | undefin
     return undefined;
   }
   const endContainerHTMLElement =
-    rangeNormalize.endContainer.parentNode instanceof HTMLElement
-      ? rangeNormalize.endContainer.parentNode
-      : undefined;
+    ((range.endContainer.parentNode && range.endContainer.parentNode.nodeType === Node.ELEMENT_NODE) ?
+      range.endContainer.parentNode as Element : undefined);
   if (!endContainerHTMLElement) {
     return undefined;
   }
@@ -293,10 +291,10 @@ const describeRangeCssSelectorWithTextPosition = async (range: Range): Promise<C
   const rangeNormalize = normalizeRange(range);
 
   const commonAncestorHTMLElement =
-    rangeNormalize.commonAncestorContainer instanceof HTMLElement
-      ? rangeNormalize.commonAncestorContainer
-      : range.startContainer.parentNode instanceof HTMLElement
-        ? range.startContainer.parentNode
+    (rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE)
+      ? rangeNormalize.commonAncestorContainer as Element
+      : (range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE)
+        ? range.startContainer.parentNode as Element
         : undefined;
   if (!commonAncestorHTMLElement) {
     return undefined;
@@ -316,10 +314,10 @@ const describeRangeCssSelectorWithTextQuote = async (range: Range): Promise<CssS
   const rangeNormalize = normalizeRange(range);
 
   const commonAncestorHTMLElement =
-    rangeNormalize.commonAncestorContainer instanceof HTMLElement
-      ? rangeNormalize.commonAncestorContainer
-      : range.startContainer.parentNode instanceof HTMLElement
-        ? range.startContainer.parentNode
+    (rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE)
+      ? rangeNormalize.commonAncestorContainer as Element
+      : (range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE)
+        ? range.startContainer.parentNode as Element
         : undefined;
   if (!commonAncestorHTMLElement) {
     return undefined;

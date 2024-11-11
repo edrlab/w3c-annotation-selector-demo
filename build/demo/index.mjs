@@ -155,9 +155,8 @@ const describeRange = async (range) => {
     if (startIsElement) {
         return undefined;
     }
-    const startContainerHTMLElement = rangeNormalize.startContainer.parentNode instanceof HTMLElement
-        ? rangeNormalize.startContainer.parentNode
-        : undefined;
+    const startContainerHTMLElement = ((range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE) ?
+        range.startContainer.parentNode : undefined);
     if (!startContainerHTMLElement) {
         return undefined;
     }
@@ -169,9 +168,8 @@ const describeRange = async (range) => {
     if (endIsElement) {
         return undefined;
     }
-    const endContainerHTMLElement = rangeNormalize.endContainer.parentNode instanceof HTMLElement
-        ? rangeNormalize.endContainer.parentNode
-        : undefined;
+    const endContainerHTMLElement = ((range.endContainer.parentNode && range.endContainer.parentNode.nodeType === Node.ELEMENT_NODE) ?
+        range.endContainer.parentNode : undefined);
     if (!endContainerHTMLElement) {
         return undefined;
     }
@@ -216,9 +214,9 @@ const describeRange = async (range) => {
 // CssSelector + TextPositionSelector
 const describeRangeCssSelectorWithTextPosition = async (range) => {
     const rangeNormalize = normalizeRange(range);
-    const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement
+    const commonAncestorHTMLElement = (rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE)
         ? rangeNormalize.commonAncestorContainer
-        : range.startContainer.parentNode instanceof HTMLElement
+        : (range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE)
             ? range.startContainer.parentNode
             : undefined;
     if (!commonAncestorHTMLElement) {
@@ -232,9 +230,9 @@ const describeRangeCssSelectorWithTextPosition = async (range) => {
 };
 const describeRangeCssSelectorWithTextQuote = async (range) => {
     const rangeNormalize = normalizeRange(range);
-    const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement
+    const commonAncestorHTMLElement = (rangeNormalize.commonAncestorContainer && rangeNormalize.commonAncestorContainer.nodeType === Node.ELEMENT_NODE)
         ? rangeNormalize.commonAncestorContainer
-        : range.startContainer.parentNode instanceof HTMLElement
+        : (range.startContainer.parentNode && range.startContainer.parentNode.nodeType === Node.ELEMENT_NODE)
             ? range.startContainer.parentNode
             : undefined;
     if (!commonAncestorHTMLElement) {
