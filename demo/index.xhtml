@@ -3840,9 +3840,64 @@
                       Line breaks and formatting are preserved.
                   ]]>AFTERCDATA</pre>
         </div>
-        <br />
-        <br />
       </div>
+      <div id="br-hr">
+        <p>Lots of BR and HR</p>
+        <br />
+        <hr />
+        <br />
+        <br />
+        <hr />
+        <hr />
+      </div>
+      <div>
+        <p>EPUB PageBreaks : </p>
+        <span style="page-break-after: always"></span>
+        <span style="page-break-after: always"></span>
+        <span style="page-break-after: always"></span>
+        <span style="page-break-after: always"></span>
+        <br style="page-break-after:always" />
+      </div>
+      <div>
+        <p>CSS::AFTER::BEFORE : </p>
+        <style type="text/css">
+          #metaInfo::before {
+            content: "Some text in CssBefore !!! BEFORE :";
+            font-weight: bold;
+            color: navy;
+            display: inline;
+          }
+
+          #metaInfo::after {
+            content: ": AFTER !! Some text in CssAfter";
+            font-weight: bold;
+            color: pink;
+            display: inline;
+          }
+        </style>
+        <div id="metaInfo">This is some meta information.</div>
+      </div>
+      <div>
+        <p>Summary-details: </p>
+        <details>
+          <summary>Frequently Asked Question 1</summary>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et
+            dolore magna aliqua.</p>
+        </details>
+
+        <details>
+          <summary>Frequently Asked Question 2</summary>
+          <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+          </p>
+        </details>
+
+        <details>
+          <summary>Frequently Asked Question 3</summary>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+        </details>
+      </div>
+      <br/>
+      <br/>
     </div>
   </div>
 
