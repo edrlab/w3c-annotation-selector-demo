@@ -54,12 +54,14 @@ function debounce(func, timeout) {
         }, timeout);
     };
 }
+// XPath from hypothesis implementation
+// https://github.com/hypothesis/client/blob/main/src/annotator/anchoring/xpath.ts
 function createXPathSelectorMatcher(selector) {
     return async function* matchAll(scope) {
         const scopeRange = toRange(scope);
         const document = ownerDocument(scopeRange);
-        const element = nodeFromXPath(selector.value);
-        console.log("XPath node found :", element);
+        const element = nodeFromXPath(selector.value, document.body);
+        console.log("XPath node found :", element, "from : ", selector.value);
         if (!element)
             throw new Error("XPath node not found !:");
         const range = document.createRange();
@@ -70,6 +72,9 @@ function createXPathSelectorMatcher(selector) {
         }
     };
 }
+// TextFragment Treora implementation
+// https://github.com/Treora/text-fragments-ts
+// from apache annotator : https://github.com/apache/incubator-annotator/issues/60
 function createTextFragmentSelectorMatcher(selector) {
     return async function* matchAll(scope) {
         const scopeRange = toRange(scope);
@@ -89,6 +94,38 @@ function createTextFragmentSelectorMatcher(selector) {
         }
     };
 }
+function createTextNodeIndexSelectorMatcher(selector) {
+    return async function* matchAll(scope) {
+        const scopeRange = toRange(scope);
+        const element = scopeRange.commonAncestorContainer;
+        const nodeIndex = selector.value;
+        if (nodeIndex < 0)
+            throw new Error("TextNodeIndex value is negative");
+        const textNode = element.childNodes[nodeIndex];
+        if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE)
+            throw new Error("Not a TEXT_NODE");
+        const range = document.createRange();
+        range.selectNode(textNode);
+        yield range;
+    };
+}
+function createCodeUnitSelectorMatcher(selector) {
+    return async function* matchAll(scope) {
+        const scopeRange = toRange(scope);
+        const scopeRangeNormalized = normalizeRange(scopeRange);
+        const textNode = scopeRangeNormalized.commonAncestorContainer;
+        if (textNode?.nodeType && textNode.nodeType !== Node.TEXT_NODE)
+            throw new Error("Not a TEXT_NODE");
+        const codeUnit = selector.value;
+        if (codeUnit < 0)
+            throw new Error("TextcodeUnit value is negative");
+        scopeRangeNormalized.setStart(textNode, codeUnit);
+        scopeRangeNormalized.setEnd(textNode, textNode.nodeValue?.length || 0);
+        yield scopeRange;
+    };
+}
+// Matcher creator https://github.com/apache/incubator-annotator/blob/cb534ed53f1356a657d2ed69244f3b600c77490d/packages/selector/src/types.ts#L106 
+// Apache annotator structure
 const createMatcher = makeRefinable((selector) => {
     // @ts-expect-error
     const innerCreateMatcher = {
@@ -97,6 +134,8 @@ const createMatcher = makeRefinable((selector) => {
         CssSelector: createCssSelectorMatcher,
         XPathSelector: createXPathSelectorMatcher,
         RangeSelector: makeCreateRangeSelectorMatcher(createMatcher),
+        TextNodeIndexSelector: createTextNodeIndexSelectorMatcher,
+        CodeUnitSelector: createCodeUnitSelectorMatcher,
         FragmentSelector: createTextFragmentSelectorMatcher,
     }[selector.type];
     if (!innerCreateMatcher) {
@@ -104,6 +143,12 @@ const createMatcher = makeRefinable((selector) => {
     }
     return innerCreateMatcher(selector);
 });
+////////////////////////////
+//
+// createSelector Section
+//
+////////////////////////////
+// RangeSelector from readium/annotations (specs in progress, not deep link available)
 const describeRange = async (range) => {
     const rangeNormalize = normalizeRange(range);
     const startIsElement = rangeNormalize.startContainer.nodeType === Node.ELEMENT_NODE;
@@ -117,7 +162,7 @@ const describeRange = async (range) => {
         return undefined;
     }
     const startContainerChildTextNodeIndex = Array.from(startContainerHTMLElement.childNodes).indexOf(rangeNormalize.startContainer);
-    if (startContainerChildTextNodeIndex < -1) {
+    if (startContainerChildTextNodeIndex < 0) {
         return undefined;
     }
     const endIsElement = range.endContainer.nodeType === Node.ELEMENT_NODE;
@@ -130,8 +175,8 @@ const describeRange = async (range) => {
     if (!endContainerHTMLElement) {
         return undefined;
     }
-    const endContainerChildTextNodeIndex = Array.from(endContainerHTMLElement.childNodes).indexOf(rangeNormalize.startContainer);
-    if (endContainerChildTextNodeIndex < -1) {
+    const endContainerChildTextNodeIndex = Array.from(endContainerHTMLElement.childNodes).indexOf(rangeNormalize.endContainer);
+    if (endContainerChildTextNodeIndex < 0) {
         return undefined;
     }
     const startAndEndEqual = startContainerHTMLElement === endContainerHTMLElement;
@@ -139,41 +184,37 @@ const describeRange = async (range) => {
     const endContainerHTMLElementCssSelector = startAndEndEqual
         ? startContainerHTMLElementCssSelector
         : finder(endContainerHTMLElement);
-    const startTextPositionSelector = {
-        type: "TextPositionSelector",
-        start: rangeNormalize.startOffset,
-        end: startAndEndEqual
-            ? rangeNormalize.endOffset
-            : rangeNormalize.startContainer.data.length,
-    };
-    const endTextPositionSelector = {
-        type: "TextPositionSelector",
-        start: rangeNormalize.endOffset,
-        end: rangeNormalize.endContainer.data.length,
-    };
     return {
         type: "RangeSelector",
         startSelector: {
             type: "CssSelector",
             value: startContainerHTMLElementCssSelector,
-            refinedBy: startContainerChildTextNodeIndex > 0 ? {
-                type: "XPathSelector",
-                value: "/text()[" + startContainerChildTextNodeIndex + "]",
-                refinedBy: startTextPositionSelector,
-            } : startTextPositionSelector,
+            refinedBy: {
+                type: "TextNodeIndexSelector",
+                value: startContainerChildTextNodeIndex,
+                refinedBy: {
+                    type: "CodeUnitSelector",
+                    value: rangeNormalize.startOffset,
+                },
+            },
         },
         endSelector: {
             type: "CssSelector",
             value: endContainerHTMLElementCssSelector,
-            refinedBy: endContainerChildTextNodeIndex > 0 ? {
-                type: "XPathSelector",
-                value: "/text()[" + endContainerChildTextNodeIndex + "]",
-                refinedBy: endTextPositionSelector,
-            } : endTextPositionSelector,
+            refinedBy: {
+                type: "TextNodeIndexSelector",
+                value: endContainerChildTextNodeIndex,
+                refinedBy: {
+                    type: "CodeUnitSelector",
+                    value: rangeNormalize.endOffset,
+                },
+            },
         },
     };
 };
-const describeRangeCssSelector = async (range) => {
+// Create Range CssSelector Refined by Apache Annotator TextPositionSelector
+// CssSelector + TextPositionSelector
+const describeRangeCssSelectorWithTextPosition = async (range) => {
     const rangeNormalize = normalizeRange(range);
     const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement
         ? rangeNormalize.commonAncestorContainer
@@ -189,18 +230,61 @@ const describeRangeCssSelector = async (range) => {
         refinedBy: await describeTextPosition(rangeNormalize, commonAncestorHTMLElement),
     };
 };
-const describeRangeXPathSelector = async (range) => {
+const describeRangeCssSelectorWithTextQuote = async (range) => {
     const rangeNormalize = normalizeRange(range);
-    const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer;
+    const commonAncestorHTMLElement = rangeNormalize.commonAncestorContainer instanceof HTMLElement
+        ? rangeNormalize.commonAncestorContainer
+        : range.startContainer.parentNode instanceof HTMLElement
+            ? range.startContainer.parentNode
+            : undefined;
     if (!commonAncestorHTMLElement) {
         return undefined;
     }
     return {
-        type: "XPathSelector",
-        value: xpathFromNode(commonAncestorHTMLElement),
-        refinedBy: await describeTextPosition(rangeNormalize, commonAncestorHTMLElement),
+        type: "CssSelector",
+        value: finder(commonAncestorHTMLElement),
+        refinedBy: await describeTextQuote(rangeNormalize, commonAncestorHTMLElement),
     };
 };
+// XPathSelector + TextPositionSelector
+const describeRangeXPathSelectorWithTextPosition = async (range) => {
+    const rangeNormalize = normalizeRange(range);
+    const commonAncestorNode = rangeNormalize.commonAncestorContainer;
+    if (!commonAncestorNode) {
+        return undefined;
+    }
+    const commonAncestorElement = commonAncestorNode.parentElement;
+    if (!commonAncestorElement) {
+        return undefined;
+    }
+    const document = ownerDocument(rangeNormalize);
+    return {
+        type: "XPathSelector",
+        value: xpathFromNode(commonAncestorElement, document.body),
+        refinedBy: await describeTextPosition(rangeNormalize, commonAncestorElement),
+    };
+};
+const describeRangeXPathSelectorWithTextQuote = async (range) => {
+    const rangeNormalize = normalizeRange(range);
+    const commonAncestorNode = rangeNormalize.commonAncestorContainer;
+    if (!commonAncestorNode) {
+        return undefined;
+    }
+    const commonAncestorElement = commonAncestorNode.parentElement;
+    if (!commonAncestorElement) {
+        return undefined;
+    }
+    const document = ownerDocument(rangeNormalize);
+    return {
+        type: "XPathSelector",
+        value: xpathFromNode(commonAncestorElement, document.body),
+        refinedBy: await describeTextQuote(rangeNormalize, commonAncestorElement),
+    };
+};
+// TextFragment Selector
+// Buggy version, just for the demo
+// TextQuoteSelector to textFragment serialization spec
+// Todo: Laurent has created a dedicated textFragmentSelector
 const describeTextFragmentSelector = async (range) => {
     const rangeNormalize = normalizeRange(range);
     const source = document.getElementById("source");
@@ -215,6 +299,20 @@ const describeTextFragmentSelector = async (range) => {
         conformsTo: " http://tools.ietf.org/rfc/rfc3236",
     };
 };
+const source = document.getElementById("source");
+const selectorTextPositionElem = document.getElementById("selector-out-textposition");
+const selectorTextPositionHypoElem = document.getElementById("selector-out-textposition-hypo");
+const selectorTextQuoteHypoElem = document.getElementById("selector-out-textquote-hypo");
+const selectorTextQuoteElem = document.getElementById("selector-out-textquote");
+const selectorRangeElem = document.getElementById("selector-out-range");
+const selectorTextFragment = document.getElementById("selector-out-textfragment");
+const selectorRangeCssTextPositionElem = document.getElementById("selector-out-rangecss-position");
+const selectorRangeCssTextQuoteElem = document.getElementById("selector-out-rangecss-quote");
+const selectorRangeXPathTextPositionElem = document.getElementById("selector-out-rangexpath-position");
+const selectorRangeXPathTextQuoteElem = document.getElementById("selector-out-rangexpath-quote");
+const selectorElements = [selectorTextPositionElem, selectorTextPositionHypoElem, selectorTextQuoteElem, selectorTextQuoteHypoElem, selectorRangeElem, selectorTextFragment, selectorRangeCssTextPositionElem, selectorRangeCssTextQuoteElem, selectorRangeXPathTextPositionElem, selectorRangeXPathTextQuoteElem];
+const results = document.getElementById("results");
+const inputTextArea = document.getElementById("input");
 const debounceOnSelectionChange = debounce(async function onSelectionChange() {
     const selection = document.getSelection();
     if (!selection)
@@ -224,8 +322,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         !selection?.focusNode) {
         return;
     }
-    console.log(selection.toString());
-    const source = document.getElementById("source");
+    console.log(`Selection Found: "${selection.toString()}"`);
     for (let i = 0; i < selection.rangeCount; i++) {
         const range = selection.getRangeAt(i);
         let selector;
@@ -233,50 +330,41 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         // let selectorToHighlight: Selector;
         let matchAll;
         const ranges = [];
-        elem = document.getElementById("selector-out-textposition");
+        elem = selectorTextPositionElem;
         try {
             selector = await describeTextPosition(range, source);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
                 ranges.push([range, "textposition"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("TextPositionSelector error: ", e);
-            if (elem)
-                elem.innerText = "TextPositionSelector error: " + e;
+            elem.innerText = "TextPositionSelector error: " + e;
         }
-        elem = document.getElementById("selector-out-textposition-hypo");
+        elem = selectorTextPositionHypoElem;
         try {
-            selector = TextQuoteAnchor.fromRange(source, range).toPositionAnchor().toSelector();
+            selector = TextPositionAnchor.fromRange(source, range).toSelector();
             const rangeFound = TextPositionAnchor.fromSelector(source, selector).toRange();
             if (rangeFound)
                 ranges.push([rangeFound, "textposition-hypothesis"]);
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("TextPositionSelectorHypothesis error: ", e);
-            if (elem)
-                elem.innerText = "TextPositionSelectorHypothesis error: " + e;
+            elem.innerText = "TextPositionSelectorHypothesis error: " + e;
         }
-        elem = document.getElementById("selector-out-textquote-hypo");
+        elem = selectorTextQuoteHypoElem;
         try {
             selector = TextQuoteAnchor.fromRange(source, range).toSelector();
             const rangeFound = TextQuoteAnchor.fromSelector(source, selector).toRange();
             if (rangeFound)
                 ranges.push([rangeFound, "quoteposition-hypothesis"]);
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("TextQuoteSelectorHypothesis error: ", e);
-            if (elem)
-                elem.innerText = "TextQuoteSelectorHypothesis error: " + e;
+            elem.innerText = "TextQuoteSelectorHypothesis error: " + e;
         }
-        elem = document.getElementById("selector-out-textquote");
+        elem = selectorTextQuoteElem;
         try {
             selector = await describeTextQuote(range, source, {
                 minimumQuoteLength: 10,
@@ -285,82 +373,87 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
             for await (const range of matchAll(source)) {
                 ranges.push([range, "textquote"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("TextQuoteSelector error: ", e);
-            if (elem)
-                elem.innerText = "TextQuoteSelector error: " + e;
+            elem.innerText = "TextQuoteSelector error: " + e;
         }
-        elem = document.getElementById("selector-out-range");
+        elem = selectorRangeElem;
         try {
             selector = await describeRange(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
                 ranges.push([range, "range"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("RangeSelector error: ", e);
-            if (elem)
-                elem.innerText = "RangeSelector error: " + e;
+            console.error(e);
+            elem.innerText = "RangeSelector error: " + e;
         }
-        elem = document.getElementById("selector-out-rangecss");
+        elem = selectorRangeCssTextPositionElem;
         try {
-            selector = await describeRangeCssSelector(range);
+            selector = await describeRangeCssSelectorWithTextPosition(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
-                ranges.push([range, "rangecss"]);
+                ranges.push([range, "rangecss-position"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("RangeCss error: ", e);
-            if (elem)
-                elem.innerText = "RangeCss error: " + e;
+            elem.innerText = "RangeCss-position error: " + e;
         }
-        elem = document.getElementById("selector-out-rangexpath");
+        elem = selectorRangeCssTextQuoteElem;
         try {
-            selector = await describeRangeXPathSelector(range);
+            selector = await describeRangeCssSelectorWithTextQuote(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
-                ranges.push([range, "rangexpath"]);
+                ranges.push([range, "rangecss-quote"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("RangeXpath error: ", e);
-            if (elem)
-                elem.innerText = "RangeXpath error: " + e;
+            elem.innerText = "RangeCss-quote error: " + e;
         }
-        elem = document.getElementById("selector-out-textfragment");
+        elem = selectorRangeXPathTextPositionElem;
         try {
-            selector = await describeTextFragmentSelector(range);
+            selector = await describeRangeXPathSelectorWithTextPosition(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
-                ranges.push([range, "textfragment"]);
+                ranges.push([range, "rangexpath-position"]);
             }
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
+            elem.innerText = JSON.stringify(selector, null, 4);
         }
         catch (e) {
-            console.error("textfragment error: ", e);
-            if (elem)
-                elem.innerText = JSON.stringify(selector, null, 4);
-            +"\n" + "textfragment error: " + e;
+            elem.innerText = "RangeXpath-position error: " + e;
         }
+        elem = selectorRangeXPathTextQuoteElem;
+        try {
+            selector = await describeRangeXPathSelectorWithTextQuote(range);
+            matchAll = createMatcher(selector);
+            for await (const range of matchAll(source)) {
+                ranges.push([range, "rangexpath-quote"]);
+            }
+            elem.innerText = JSON.stringify(selector, null, 4);
+        }
+        catch (e) {
+            elem.innerText = "RangeXpath-quote error: " + e;
+        }
+        // elem = selectorTextFragment;
+        // try {
+        //   selector = await describeTextFragmentSelector(range);
+        //   matchAll = createMatcher(selector);
+        //   for await (const range of matchAll(source)) {
+        //     ranges.push([range, "textfragment"]);
+        //   }
+        //   elem.innerText = JSON.stringify(selector, null, 4);
+        // } catch (e) {
+        //   elem.innerText = JSON.stringify(selector, null, 4); + "\n" + "textfragment error: " + e;
+        // }
         cleanup();
         // if (!ranges.length) anchor(undefined);
-        const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on 8 selectors`;
-        console.log(txt);
-        elem = document.getElementById("results");
-        elem.innerText = txt;
-        //    elem.innerText += areRangesEqual(ranges) ? "All Ranges are equal" : "Not all Ranges are equal !!";
+        const txt = `There are ${ranges.length} ranges found [ ${ranges.map(([, v]) => v).join(", ")} ] on ${selectorElements.length} selectors`;
+        results.innerText = txt;
         for (const [range, id] of ranges) {
             console.log("highlight this Range: ", range);
             anchor(range, id);
@@ -368,9 +461,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
     }
 }, 500);
 document.addEventListener("selectionchange", debounceOnSelectionChange);
-const inputTextArea = document.getElementById("input");
 const debounceInputChange = debounce(async (e) => {
-    const inputTextArea = document.getElementById("input");
     const selector = inputTextArea.value;
     if (!selector)
         return;
@@ -381,24 +472,10 @@ const debounceInputChange = debounce(async (e) => {
     catch {
         return;
     }
-    console.log(selectorParsed);
-    const source = document.getElementById("source");
     cleanup();
-    let elem;
-    elem = document.getElementById("selector-out-rangecss");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-range");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-textquote");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-textquote-hypo");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-textposition-hypo");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-textposition");
-    elem.innerText = "";
-    elem = document.getElementById("selector-out-rangexpath");
-    elem.innerText = "";
+    for (const elem of selectorElements) {
+        elem.innerText = "";
+    }
     const matchAll = createMatcher(selectorParsed);
     for await (const range of matchAll(source)) {
         anchor(range, "custom");
@@ -407,4 +484,3 @@ const debounceInputChange = debounce(async (e) => {
 inputTextArea.addEventListener("change", debounceInputChange);
 const inputButton = document.getElementById("inputButton");
 inputButton.addEventListener("click", debounceInputChange);
-// inputButton.onclick = () => debounceInputChange();;
