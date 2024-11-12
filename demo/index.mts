@@ -9,6 +9,9 @@ import { normalizeRange } from "../vendor/apache-annotator/dom/normalize-range.j
 import { toRange } from "../vendor/apache-annotator/dom/to-range.js";
 import { ownerDocument } from "../vendor/apache-annotator/dom/owner-document.js";
 
+import { convertRangeInfo, getCurrentSelectionInfo } from "r2-navigator-js/dist/es8-es2017/src/electron/renderer/webview/selection.js";
+import { type ReadiumElectronWebviewWindow } from "r2-navigator-js/dist/es8-es2017/src/electron/renderer/webview/state.js";
+
 import { finder } from "@medv/finder";
 
 import { makeRefinable } from "../vendor/apache-annotator/selector/refinable.js";
@@ -421,6 +424,7 @@ const selectorRangeXPathTextQuoteElem = document.getElementById("selector-out-ra
 const selectorElements = [selectorTextPositionElem, selectorTextPositionHypoElem, selectorTextQuoteElem, selectorTextQuoteHypoElem, selectorRangeElem, selectorTextFragment, selectorRangeCssTextPositionElem, selectorRangeCssTextQuoteElem, selectorRangeXPathTextPositionElem, selectorRangeXPathTextQuoteElem];
 const results = document.getElementById("results") as HTMLElement;
 const inputTextArea = document.getElementById("input") as HTMLTextAreaElement;
+const selectorR2NavigatorJS = document.getElementById("selector-out-r2-navigator-js") as HTMLElement;
 
 const debounceOnSelectionChange = debounce(async function onSelectionChange() {
   const selection = document.getSelection();
@@ -433,7 +437,6 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
     return;
   }
   console.log(`Selection Found: "${selection.toString()}"`);
-
 
   for (let i = 0; i < selection.rangeCount; i++) {
     const range = selection.getRangeAt(i);
@@ -575,6 +578,26 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
       console.log("highlight this Range: ", range);
       anchor(range, id);
     }
+
+
+    // r2-navigator-js
+    
+    elem = selectorR2NavigatorJS;
+    try {
+      const r2Win: ReadiumElectronWebviewWindow = window as ReadiumElectronWebviewWindow;
+      r2Win.READIUM2 = {
+        DEBUG_VISUALS: false,
+      } as any;
+      const r2NavSelector = getCurrentSelectionInfo(r2Win, (element) => finder(element), () => undefined, () => undefined);
+      const rangeInfo = r2NavSelector?.rangeInfo;
+      if (!rangeInfo) throw new Error("no range found");
+      const range = convertRangeInfo(document, rangeInfo);
+      anchor(range, "r2-navigator-js");
+      elem.innerText = JSON.stringify(r2NavSelector, null, 4);
+    } catch (e) {
+      elem.innerText = "r2-navigator-js error: " + e; 
+    }
+
   }
 }, 500);
 document.addEventListener("selectionchange", debounceOnSelectionChange);

@@ -7,6 +7,7 @@ import { createCssSelectorMatcher } from "../vendor/apache-annotator/dom/css.js"
 import { normalizeRange } from "../vendor/apache-annotator/dom/normalize-range.js";
 import { toRange } from "../vendor/apache-annotator/dom/to-range.js";
 import { ownerDocument } from "../vendor/apache-annotator/dom/owner-document.js";
+import { convertRangeInfo, getCurrentSelectionInfo } from "r2-navigator-js/dist/es8-es2017/src/electron/renderer/webview/selection.js";
 import { finder } from "@medv/finder";
 import { makeRefinable } from "../vendor/apache-annotator/selector/refinable.js";
 import { anchor, cleanup } from "./highlight.mjs";
@@ -311,6 +312,7 @@ const selectorRangeXPathTextQuoteElem = document.getElementById("selector-out-ra
 const selectorElements = [selectorTextPositionElem, selectorTextPositionHypoElem, selectorTextQuoteElem, selectorTextQuoteHypoElem, selectorRangeElem, selectorTextFragment, selectorRangeCssTextPositionElem, selectorRangeCssTextQuoteElem, selectorRangeXPathTextPositionElem, selectorRangeXPathTextQuoteElem];
 const results = document.getElementById("results");
 const inputTextArea = document.getElementById("input");
+const selectorR2NavigatorJS = document.getElementById("selector-out-r2-navigator-js");
 const debounceOnSelectionChange = debounce(async function onSelectionChange() {
     const selection = document.getSelection();
     if (!selection)
@@ -455,6 +457,24 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         for (const [range, id] of ranges) {
             console.log("highlight this Range: ", range);
             anchor(range, id);
+        }
+        // r2-navigator-js
+        elem = selectorR2NavigatorJS;
+        try {
+            const r2Win = window;
+            r2Win.READIUM2 = {
+                DEBUG_VISUALS: false,
+            };
+            const r2NavSelector = getCurrentSelectionInfo(r2Win, (element) => finder(element), () => undefined, () => undefined);
+            const rangeInfo = r2NavSelector?.rangeInfo;
+            if (!rangeInfo)
+                throw new Error("no range found");
+            const range = convertRangeInfo(document, rangeInfo);
+            anchor(range, "r2-navigator-js");
+            elem.innerText = JSON.stringify(r2NavSelector, null, 4);
+        }
+        catch (e) {
+            elem.innerText = "r2-navigator-js error: " + e;
         }
     }
 }, 500);

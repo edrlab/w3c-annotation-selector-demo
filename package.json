@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "tsc": "tsc",
     "build": "npm run tsc && npm run esbuild && cp demo/index.xhtml web/index.xhtml",
-    "esbuild": "esbuild build/demo/index.mjs --bundle --format=esm --target=esnext --outfile=web/index.js",
+    "esbuild": "esbuild build/demo/index.mjs --bundle --format=esm --target=esnext --external:electron --banner:js=\"var require = () => ({});\" --outfile=web/index.js",
     "serve": "cd web && python3 -m http.server --protocol HTTP/1.1",
     "publish": "surge . accidental-shame.surge.sh",
     "dev": "concurrently \"npm run tsc -- --watch\" \"npm run esbuild -- --watch\" \"npm run serve\"",
@@ -19,10 +19,12 @@
   "devDependencies": {
     "concurrently": "^9.1.0",
     "esbuild": "0.24.0",
+    "rimraf": "^6.0.1",
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "@medv/finder": "^3.2.0"
+    "@medv/finder": "^3.2.0",
+    "r2-navigator-js": "^1.16.5"
   },
   "type": "module"
 }
