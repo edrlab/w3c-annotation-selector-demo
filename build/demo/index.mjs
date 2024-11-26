@@ -332,6 +332,7 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         const ranges = [];
         elem = selectorTextPositionElem;
         try {
+            console.time("TIME: TextPositionSelector");
             selector = await describeTextPosition(range, source);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -342,8 +343,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "TextPositionSelector error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: TextPositionSelector");
+        }
         elem = selectorTextPositionHypoElem;
         try {
+            console.time("TIME: TextPositionSelectorHypothesis");
             selector = TextPositionAnchor.fromRange(source, range).toSelector();
             const rangeFound = TextPositionAnchor.fromSelector(source, selector).toRange();
             if (rangeFound)
@@ -353,8 +358,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "TextPositionSelectorHypothesis error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: TextPositionSelectorHypothesis");
+        }
         elem = selectorTextQuoteHypoElem;
         try {
+            console.time("TIME: TextQuoteSelectorHypothesis");
             selector = TextQuoteAnchor.fromRange(source, range).toSelector();
             const rangeFound = TextQuoteAnchor.fromSelector(source, selector).toRange();
             if (rangeFound)
@@ -364,8 +373,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "TextQuoteSelectorHypothesis error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: TextQuoteSelectorHypothesis");
+        }
         elem = selectorTextQuoteElem;
         try {
+            console.time("TIME: TextQuoteSelector");
             selector = await describeTextQuote(range, source, {
                 minimumQuoteLength: 10,
             });
@@ -378,8 +391,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "TextQuoteSelector error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: TextQuoteSelector");
+        }
         elem = selectorRangeElem;
         try {
+            console.time("TIME: RangeSelector");
             selector = await describeRange(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -391,8 +408,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
             console.error(e);
             elem.innerText = "RangeSelector error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: RangeSelector");
+        }
         elem = selectorRangeCssTextPositionElem;
         try {
+            console.time("TIME: RangeCss-position");
             selector = await describeRangeCssSelectorWithTextPosition(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -403,8 +424,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "RangeCss-position error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: RangeCss-position");
+        }
         elem = selectorRangeCssTextQuoteElem;
         try {
+            console.time("TIME: RangeCss-quote");
             selector = await describeRangeCssSelectorWithTextQuote(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -415,8 +440,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "RangeCss-quote error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: RangeCss-quote");
+        }
         elem = selectorRangeXPathTextPositionElem;
         try {
+            console.time("TIME: RangeXpath-position");
             selector = await describeRangeXPathSelectorWithTextPosition(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -427,8 +456,12 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         catch (e) {
             elem.innerText = "RangeXpath-position error: " + e;
         }
+        finally {
+            console.timeEnd("TIME: RangeXpath-position");
+        }
         elem = selectorRangeXPathTextQuoteElem;
         try {
+            console.time("TIME: RangeXpath-quote");
             selector = await describeRangeXPathSelectorWithTextQuote(range);
             matchAll = createMatcher(selector);
             for await (const range of matchAll(source)) {
@@ -438,6 +471,9 @@ const debounceOnSelectionChange = debounce(async function onSelectionChange() {
         }
         catch (e) {
             elem.innerText = "RangeXpath-quote error: " + e;
+        }
+        finally {
+            console.timeEnd("TIME: RangeXpath-quote");
         }
         // elem = selectorTextFragment;
         // try {
